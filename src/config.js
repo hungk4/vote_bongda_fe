@@ -4,8 +4,8 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
 // 2. Các endpoint cụ thể
-export const API_PLAYERS = `${API_BASE}/players`; // Dùng cho danh sách, vote, xóa
-export const API_LOGIN   = `${API_BASE}/login`;   // Dùng để check pass
+export const API_PLAYERS = `${API_BASE}/api/players`; // Dùng cho danh sách, vote, xóa
+export const API_LOGIN   = `${API_BASE}/api/login`;   // Dùng để check pass
 
 // 3. Thông tin ngân hàng
 export const BANK_INFO = {
