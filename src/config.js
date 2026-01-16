@@ -1,7 +1,7 @@
 // client/src/config.js
 
 // 1. Đường dẫn gốc (Base)
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
 // 2. Các endpoint cụ thể
 export const API_PLAYERS = `${API_BASE}/players`; // Dùng cho danh sách, vote, xóa
