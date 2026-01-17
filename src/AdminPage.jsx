@@ -4,40 +4,14 @@ import { API_PLAYERS, API_LOGIN } from './config';
 
 const CR7_LOGIN_IMG = "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg";
 
+// --- Toast Component ---
 const Toast = ({ toast }) => {
     if (!toast) return null;
-    
     const isSuccess = toast.type === 'success';
-    const bgColor = isSuccess ? '#ffffff' : '#fff5f5';
-    const borderColor = isSuccess ? '#28a745' : '#dc3545';
-    const icon = isSuccess ? '✅' : '⚠️';
-
     return (
-        <div style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            backgroundColor: bgColor,
-            borderLeft: `5px solid ${borderColor}`,
-            color: '#333',
-            padding: '15px 20px',
-            borderRadius: '8px',
-            boxShadow: '0 5px 15px rgba(0,0,0,0.15)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            minWidth: '250px',
-            animation: 'slideIn 0.3s ease'
-        }}>
-            <span style={{ fontSize: '18px' }}>{icon}</span>
-            <span style={{ fontWeight: '600', fontSize: '14px' }}>{toast.message}</span>
-            <style>{`
-              @keyframes slideIn {
-                  from { transform: translateX(100%); opacity: 0; }
-                  to { transform: translateX(0); opacity: 1; }
-              }
-            `}</style>
+        <div className={`fixed top-5 right-5 z-50 bg-white border-l-4 text-gray-800 px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 max-w-[85vw] animate-[slideIn_0.3s_ease] transition-all ${isSuccess ? 'border-green-500' : 'border-red-500'}`}>
+            <span className="text-xl">{isSuccess ? '✅' : '⚠️'}</span>
+            <span className="font-semibold text-sm">{toast.message}</span>
         </div>
     );
 };
@@ -47,18 +21,12 @@ function AdminPage() {
   const [adminPass, setAdminPass] = useState(localStorage.getItem('adminPass') || '');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // State thông báo
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    if (adminPass) { verifyPassword(adminPass); }
-  }, []);
+  useEffect(() => { if (adminPass) verifyPassword(adminPass); }, []);
 
-  // Hàm hiện thông báo
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    // Tự tắt sau 3 giây
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -82,8 +50,8 @@ function AdminPage() {
     try {
         await axios.post(API_LOGIN, { adminPass });
         setIsLoggedIn(true); localStorage.setItem('adminPass', adminPass); fetchPlayers(); 
-    } catch (err) { alert("Sai mật khẩu!"); setIsLoggedIn(false);
-    } finally { setLoading(false); }
+    } catch (err) { alert("Sai mật khẩu!"); setIsLoggedIn(false); } 
+    finally { setLoading(false); }
   };
 
   const handleLogout = () => {
@@ -93,63 +61,72 @@ function AdminPage() {
   const togglePay = async (id) => {
     try { 
         const player = players.find(p => p._id === id);
-        
-        // Gọi API
         await axios.put(`${API_PLAYERS}/${id}/pay`, { adminPass }); 
-        
-        // Cập nhật lại danh sách ngay lập tức
         fetchPlayers();
-        
-        // Hiện thông báo 1 lần duy nhất
-        const statusText = !player.hasPaid ? "Đã đóng tiền" : "Chưa đóng tiền";
+        const statusText = !player.hasPaid ? "Đã đóng tiền" : "Hoàn tác (Chưa đóng)";
         showToast(`Đã cập nhật: ${player.name} -> ${statusText}`, 'success');
-
-    } catch (err) { 
-        showToast("Lỗi server hoặc sai mật khẩu!", 'error'); 
-    }
+    } catch (err) { showToast("Lỗi server!", 'error'); }
   };
 
   const deletePlayer = async (id) => {
-      if(window.confirm("Xóa người này khỏi đội hình?")) {
+      if(window.confirm("Xóa người này?")) {
         try { 
             await axios.delete(`${API_PLAYERS}/${id}`, { data: { adminPass: adminPass } }); 
             fetchPlayers();
-            showToast("Đã xóa cầu thủ khỏi danh sách", 'error'); 
-        } catch (err) { 
-            showToast("Lỗi khi xóa!", 'error'); 
-        }
+            showToast("Đã xóa!", 'error'); 
+        } catch (err) { showToast("Lỗi xóa!", 'error'); }
       }
   };
 
-  // --- GIAO DIỆN LOGIN ---
+  const handleRandomSplit = async () => {
+      if (players.length < 2) return showToast("Ít người quá chia làm sao?", 'error');
+      const shuffled = [...players].sort(() => 0.5 - Math.random());
+      const mid = Math.ceil(shuffled.length / 2);
+      const teamA_Ids = shuffled.slice(0, mid).map(p => p._id);
+      const teamB_Ids = shuffled.slice(mid).map(p => p._id);
+      updateTeams(teamA_Ids, teamB_Ids, "Đã chia ngẫu nhiên thành công!");
+  };
+
+  const handleChangeTeam = (playerId, newTeam) => {
+      const updatedPlayers = players.map(p => p._id === playerId ? { ...p, team: newTeam } : p);
+      const teamA_Ids = updatedPlayers.filter(p => p.team === 'A').map(p => p._id);
+      const teamB_Ids = updatedPlayers.filter(p => p.team === 'B').map(p => p._id);
+      
+      // Hiện thông báo khi sắp thủ công
+      const playerName = players.find(p => p._id === playerId).name;
+      const teamName = newTeam === 'A' ? "Team A" : newTeam === 'B' ? "Team B" : "Hủy team";
+      
+      updateTeams(teamA_Ids, teamB_Ids, `Đã xếp ${playerName} vào ${teamName}`);
+  };
+
+  const updateTeams = async (teamA_Ids, teamB_Ids, successMsg) => {
+      try {
+          await axios.put(`${API_PLAYERS}/split`, { adminPass, teamA_Ids, teamB_Ids });
+          await fetchPlayers();
+          if(successMsg) showToast(successMsg);
+      } catch (e) { showToast("Lỗi cập nhật đội hình", "error"); }
+  };
+
+  const handleResetTeams = async () => {
+      if(!window.confirm("Reset tất cả về danh sách thường?")) return;
+      updateTeams([], [], "Đã reset đội hình");
+  };
+
   if (!isLoggedIn) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f2f5', padding: '20px' }}>
-        <div style={{ width: '100%', maxWidth: '450px', backgroundColor: 'white', padding: '40px 30px', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-            
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '30px' }}>
-                <img src={CR7_LOGIN_IMG} alt="Admin" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #28a745', padding: '2px', marginRight: '20px' }} />
-                <div style={{ textAlign: 'left' }}>
-                    <h2 style={{margin: '0 0 5px 0', fontWeight: 800, color: '#333', fontSize: '20px'}}>HUẤN LUYỆN VIÊN</h2>
-                    <p style={{margin: 0, color: '#666', fontSize: '14px'}}>Khu vực chỉ dành cho ban quản lý.</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl transform transition-all hover:scale-[1.01]">
+            <div className="flex items-center justify-center mb-6 gap-3 flex-wrap">
+                <img src={CR7_LOGIN_IMG} alt="Admin" className="w-16 h-16 rounded-full object-cover border-4 border-green-500 p-0.5 shadow-md" />
+                <div className="text-left">
+                    <h2 className="m-0 font-extrabold text-gray-800 text-lg tracking-tight">HUẤN LUYỆN VIÊN</h2>
+                    <p className="m-0 text-gray-500 text-xs font-medium">Khu vực quản lý</p>
                 </div>
             </div>
-            
-            <input 
-                type="password" placeholder="Mật khẩu chiến thuật..." 
-                value={adminPass} onChange={(e) => setAdminPass(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
-                style={{ width: '100%', padding: '14px', marginBottom: '15px', borderRadius: '8px', border: '1px solid #ddd', boxSizing: 'border-box', fontSize: '16px', outline: 'none', transition: '0.3s' }}
-                onFocus={(e) => e.target.style.borderColor = '#28a745'}
-                onBlur={(e) => e.target.style.borderColor = '#ddd'}
-            />
-            
-            <button 
-                onClick={handleLogin} disabled={loading}
-                style={{ width: '100%', padding: '14px', background: '#333', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '16px', fontWeight: 'bold', transition: '0.3s' }}
-                onMouseOver={(e) => !loading && (e.target.style.background = '#555')}
-                onMouseOut={(e) => !loading && (e.target.style.background = '#333')}
-            >
+            <input type="password" placeholder="Mật khẩu chiến thuật..." value={adminPass} onChange={(e) => setAdminPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
+                className="w-full p-3 mb-4 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all" />
+            <button onClick={handleLogin} disabled={loading} 
+                className="w-full p-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black hover:shadow-lg transition-all disabled:opacity-70 transform active:scale-95">
                 {loading ? 'Đang kiểm tra...' : 'MỞ KHÓA'}
             </button>
         </div>
@@ -157,59 +134,67 @@ function AdminPage() {
     );
   }
 
-  // --- GIAO DIỆN QUẢN LÝ ---
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', padding: '20px', display: 'flex', justifyContent: 'center' }}>
-      
-      {/* 2. HIỂN THỊ TOAST Ở ĐÂY (Truyền state vào props) */}
+    <div className="min-h-screen bg-gray-100 p-4 flex justify-center font-sans">
       <Toast toast={toast} />
-
-      <div style={{ width: '100%', maxWidth: '800px', background: 'white', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', height: 'fit-content' }}>
+      <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg overflow-hidden h-fit border border-gray-100">
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 25px', borderBottom: '1px solid #eee' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ fontSize: '24px', marginRight: '10px' }}>🛠</span>
-                <h1 style={{ margin: 0, fontSize: '20px', color: '#333', fontWeight: '700' }}>Quản Lý Đội Hình</h1>
+        {/* Header */}
+        <div className="flex justify-between items-center p-5 border-b border-gray-100 flex-wrap gap-3 bg-white">
+            <div className="flex items-center gap-2">
+                <span className="text-2xl animate-bounce">🛠</span>
+                <h1 className="m-0 text-lg text-gray-800 font-bold uppercase tracking-tight">Quản Lý ({players.length})</h1>
             </div>
-            <button onClick={handleLogout} style={{ padding: '8px 16px', background: '#f8f9fa', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
-                Đăng xuất
-            </button>
+            <div className="flex gap-2 flex-wrap">
+                <button onClick={handleRandomSplit} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-all hover:shadow-md active:scale-95">⚡ Random</button>
+                <button onClick={handleResetTeams} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all hover:shadow-md active:scale-95">🔄 Reset</button>
+                <button onClick={handleLogout} className="px-3 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-all hover:shadow-md active:scale-95">Thoát</button>
+            </div>
         </div>
 
-        <div style={{ overflowX: 'auto', paddingBottom: '10px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+        {/* Table */}
+        <div className="overflow-x-auto pb-2">
+            <table className="w-full border-collapse min-w-[600px]">
                 <thead>
-                    <tr style={{ background: '#f8f9fa' }}>
-                        <th style={{ padding: '15px 25px', textAlign: 'left', color: '#666', fontSize: '13px', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>Cầu thủ</th>
-                        <th style={{ padding: '15px 10px', textAlign: 'center', color: '#666', fontSize: '13px', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>Trạng thái quỹ</th>
-                        <th style={{ padding: '15px 25px', textAlign: 'right', color: '#666', fontSize: '13px', textTransform: 'uppercase', borderBottom: '1px solid #eee' }}>Thao tác</th>
+                    <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                        <th className="p-4 text-left w-1/3 font-bold">Cầu thủ</th>
+                        <th className="p-4 text-center font-bold">Xếp đội</th>
+                        <th className="p-4 text-center font-bold">Trạng thái</th>
+                        <th className="p-4 text-right font-bold">Thao tác</th>
                     </tr>
                 </thead>
-                <tbody>
-                {players.length === 0 ? (
-                    <tr><td colSpan="3" style={{padding: '40px', textAlign: 'center', color: '#999', fontStyle: 'italic'}}>Chưa có cầu thủ nào đăng ký.</td></tr>
-                ) : (
-                    players.map((p) => (
-                        <tr key={p._id} style={{ borderBottom: '1px solid #f1f1f1' }}>
-                            <td style={{ padding: '15px 25px', fontWeight: '600', color: '#333', verticalAlign: 'middle', textAlign: 'left' }}>{p.name}</td>
-                            <td style={{ padding: '15px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-                                {p.hasPaid ? (
-                                    <span style={{ color: '#155724', background: '#d4edda', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700 }}>Đã ting ting</span>
-                                ) : (
-                                    <span style={{ color: '#721c24', background: '#f8d7da', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700 }}>Chưa ting ting</span>
-                                )}
-                            </td>
-                            <td style={{ padding: '15px 25px', textAlign: 'right', verticalAlign: 'middle' }}>
-                                <button onClick={() => togglePay(p._id)} style={{ marginRight: '8px', cursor: 'pointer', padding: '8px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '500', boxShadow: '0 2px 5px rgba(40, 167, 69, 0.2)' }}>
-                                    ✔ Tick
-                                </button>
-                                <button onClick={() => deletePlayer(p._id)} style={{ cursor: 'pointer', padding: '8px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '500', boxShadow: '0 2px 5px rgba(220, 53, 69, 0.2)' }}>
-                                    🗑 Xóa
-                                </button>
-                            </td>
-                        </tr>
-                    ))
-                )}
+                <tbody className="text-sm divide-y divide-gray-50">
+                {players.map((p) => (
+                    <tr key={p._id} className="hover:bg-gray-50 transition-colors group">
+                        {/* Tên cầu thủ căn trái */}
+                        <td className="p-4 font-bold text-gray-800 align-middle text-left group-hover:text-black">{p.name}</td>
+                        
+                        <td className="p-4 text-center align-middle">
+                            <div className="flex justify-center gap-2">
+                                <button onClick={() => handleChangeTeam(p._id, 'A')} 
+                                    className={`w-8 h-8 rounded-full font-bold text-xs transition-all duration-200 hover:scale-110 shadow-sm ${p.team === 'A' ? 'bg-rose-600 text-white ring-2 ring-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}>A</button>
+                                
+                                <button onClick={() => handleChangeTeam(p._id, null)} 
+                                    className="w-8 h-8 rounded-full font-bold text-xs bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-all duration-200 hover:scale-110 shadow-sm">-</button>
+
+                                <button onClick={() => handleChangeTeam(p._id, 'B')} 
+                                    className={`w-8 h-8 rounded-full font-bold text-xs transition-all duration-200 hover:scale-110 shadow-sm ${p.team === 'B' ? 'bg-blue-600 text-white ring-2 ring-blue-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>B</button>
+                            </div>
+                        </td>
+
+                        <td className="p-4 text-center align-middle">
+                            {p.hasPaid ? (
+                                <span className="text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap border border-green-200">Đã ting ting</span>
+                            ) : (
+                                <span className="text-red-700 bg-red-50 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap border border-red-100">Chưa ting ting</span>
+                            )}
+                        </td>
+                        <td className="p-4 text-right align-middle min-w-[150px]">
+                            <button onClick={() => togglePay(p._id)} className="mr-2 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all text-xs font-bold shadow-sm hover:shadow active:scale-95">Tick</button>
+                            <button onClick={() => deletePlayer(p._id)} className="px-3 py-1.5 bg-white border border-red-200 text-red-500 rounded-md hover:bg-red-50 hover:border-red-300 transition-all text-xs font-bold shadow-sm hover:shadow active:scale-95">Xóa</button>
+                        </td>
+                    </tr>
+                ))}
                 </tbody>
             </table>
         </div>
@@ -217,5 +202,4 @@ function AdminPage() {
     </div>
   );
 }
-
 export default AdminPage;
