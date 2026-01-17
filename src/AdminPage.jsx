@@ -4,15 +4,63 @@ import { API_PLAYERS, API_LOGIN } from './config';
 
 const CR7_LOGIN_IMG = "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg";
 
+const Toast = ({ toast }) => {
+    if (!toast) return null;
+    
+    const isSuccess = toast.type === 'success';
+    const bgColor = isSuccess ? '#ffffff' : '#fff5f5';
+    const borderColor = isSuccess ? '#28a745' : '#dc3545';
+    const icon = isSuccess ? '✅' : '⚠️';
+
+    return (
+        <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            backgroundColor: bgColor,
+            borderLeft: `5px solid ${borderColor}`,
+            color: '#333',
+            padding: '15px 20px',
+            borderRadius: '8px',
+            boxShadow: '0 5px 15px rgba(0,0,0,0.15)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            minWidth: '250px',
+            animation: 'slideIn 0.3s ease'
+        }}>
+            <span style={{ fontSize: '18px' }}>{icon}</span>
+            <span style={{ fontWeight: '600', fontSize: '14px' }}>{toast.message}</span>
+            <style>{`
+              @keyframes slideIn {
+                  from { transform: translateX(100%); opacity: 0; }
+                  to { transform: translateX(0); opacity: 1; }
+              }
+            `}</style>
+        </div>
+    );
+};
+
 function AdminPage() {
   const [players, setPlayers] = useState([]);
   const [adminPass, setAdminPass] = useState(localStorage.getItem('adminPass') || '');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // State thông báo
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (adminPass) { verifyPassword(adminPass); }
   }, []);
+
+  // Hàm hiện thông báo
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    // Tự tắt sau 3 giây
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const verifyPassword = async (password) => {
     try {
@@ -43,14 +91,33 @@ function AdminPage() {
   };
 
   const togglePay = async (id) => {
-    try { await axios.put(`${API_PLAYERS}/${id}/pay`, { adminPass }); fetchPlayers();
-    } catch (err) { alert("Lỗi server hoặc sai pass!"); }
+    try { 
+        const player = players.find(p => p._id === id);
+        
+        // Gọi API
+        await axios.put(`${API_PLAYERS}/${id}/pay`, { adminPass }); 
+        
+        // Cập nhật lại danh sách ngay lập tức
+        fetchPlayers();
+        
+        // Hiện thông báo 1 lần duy nhất
+        const statusText = !player.hasPaid ? "Đã đóng tiền" : "Chưa đóng tiền";
+        showToast(`Đã cập nhật: ${player.name} -> ${statusText}`, 'success');
+
+    } catch (err) { 
+        showToast("Lỗi server hoặc sai mật khẩu!", 'error'); 
+    }
   };
 
   const deletePlayer = async (id) => {
       if(window.confirm("Xóa người này khỏi đội hình?")) {
-        try { await axios.delete(`${API_PLAYERS}/${id}`, { data: { adminPass: adminPass } }); fetchPlayers();
-        } catch (err) { alert("Lỗi khi xóa!"); }
+        try { 
+            await axios.delete(`${API_PLAYERS}/${id}`, { data: { adminPass: adminPass } }); 
+            fetchPlayers();
+            showToast("Đã xóa cầu thủ khỏi danh sách", 'error'); 
+        } catch (err) { 
+            showToast("Lỗi khi xóa!", 'error'); 
+        }
       }
   };
 
@@ -93,6 +160,10 @@ function AdminPage() {
   // --- GIAO DIỆN QUẢN LÝ ---
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', padding: '20px', display: 'flex', justifyContent: 'center' }}>
+      
+      {/* 2. HIỂN THỊ TOAST Ở ĐÂY (Truyền state vào props) */}
+      <Toast toast={toast} />
+
       <div style={{ width: '100%', maxWidth: '800px', background: 'white', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', height: 'fit-content' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 25px', borderBottom: '1px solid #eee' }}>
@@ -105,7 +176,6 @@ function AdminPage() {
             </button>
         </div>
 
-        {/* Table Container: overflowX auto giúp cuộn ngang trên mobile */}
         <div style={{ overflowX: 'auto', paddingBottom: '10px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
                 <thead>
@@ -121,7 +191,6 @@ function AdminPage() {
                 ) : (
                     players.map((p) => (
                         <tr key={p._id} style={{ borderBottom: '1px solid #f1f1f1' }}>
-                            {/* textAlign: left cho tên cầu thủ */}
                             <td style={{ padding: '15px 25px', fontWeight: '600', color: '#333', verticalAlign: 'middle', textAlign: 'left' }}>{p.name}</td>
                             <td style={{ padding: '15px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
                                 {p.hasPaid ? (
