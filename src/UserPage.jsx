@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_PLAYERS, BANK_INFO } from './config';
+// Nhớ import API_MATCH vào đây
+import { API_PLAYERS, BANK_INFO, API_MATCH } from './config';
 
 const CR7_BANNER = "https://cdn.images.express.co.uk/img/dynamic/67/590x/secondary/Man-Utd-news-Cristiano-Ronaldo-SIU-celebration-Brighton-goal-3918291.jpg?r=1645034779588";
 
@@ -8,8 +9,54 @@ function UserPage() {
   const [players, setPlayers] = useState([]);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // --- STATE MỚI ---
+  const [matchInfo, setMatchInfo] = useState(null);
+  const [timeLeft, setTimeLeft] = useState('');
 
-  useEffect(() => { fetchPlayers(); }, []);
+  useEffect(() => { 
+      fetchPlayers();
+      fetchMatchInfo(); 
+  }, []);
+
+  // Logic đếm ngược thời gian
+  useEffect(() => {
+    if (!matchInfo || !matchInfo.time) return;
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const matchTime = new Date(matchInfo.time).getTime();
+      const distance = matchTime - now;
+
+      if (distance < 0) {
+        setTimeLeft("TRẬN ĐẤU ĐANG DIỄN RA");
+        clearInterval(interval);
+      } else {
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        // Format hiển thị ngắn gọn: 1d 02:30:15
+        const h = hours < 10 ? `0${hours}` : hours;
+        const m = minutes < 10 ? `0${minutes}` : minutes;
+        const s = seconds < 10 ? `0${seconds}` : seconds;
+        
+        setTimeLeft(days > 0 ? `${days}d ${h}:${m}:${s}` : `${h}:${m}:${s}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [matchInfo]);
+
+  const fetchMatchInfo = async () => {
+    try {
+        const res = await axios.get(API_MATCH);
+        setMatchInfo(res.data);
+    } catch (error) {
+        console.error("Chưa có thông tin trận đấu");
+    }
+  };
 
   const fetchPlayers = async () => {
     try {
@@ -74,15 +121,41 @@ function UserPage() {
       <div className="w-full max-w-[500px] bg-white min-h-screen shadow-lg flex flex-col">
         
         {/* Banner */}
-        <div className="h-56 relative overflow-hidden flex-shrink-0">
+        <div className="h-64 relative overflow-hidden flex-shrink-0">
             <img src={CR7_BANNER} alt="CR7" className="w-full h-full object-cover object-top" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+            
             <div className="absolute bottom-4 left-4 right-4">
-                <h1 className="m-0 text-white uppercase tracking-wider text-2xl font-extrabold drop-shadow-md">⚽ Kèo Bóng Đá</h1>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                    <span className="text-[11px] bg-white/20 px-2 py-1 rounded text-white backdrop-blur-sm">🏟️ Sân 7</span>
-                    <span className="text-[11px] bg-green-600/90 px-2 py-1 rounded text-white font-bold">
-                        💰 Quỹ: {totalPaid}/{players.length} ting ting
+                <h1 className="m-0 text-white uppercase tracking-wider text-xl font-extrabold drop-shadow-md mb-1">⚽ Kèo Bóng Đá</h1>
+                
+                {/* --- PHẦN MỚI: ĐỒNG HỒ ĐẾM NGƯỢC --- */}
+                {timeLeft && (
+                    <div className="bg-white/10 backdrop-blur-md rounded-lg p-2 border border-white/20 mb-2 inline-block">
+                        <div className="text-yellow-400 font-mono font-bold text-xl leading-none drop-shadow-sm">
+                            {timeLeft}
+                        </div>
+                        <div className="text-gray-300 text-[10px] mt-1 font-medium uppercase tracking-wide">
+                            Thời gian còn lại
+                        </div>
+                    </div>
+                )}
+                {/* ----------------------------------- */}
+
+                <div className="flex gap-2 mt-1 flex-wrap">
+                    {/* Hiển thị địa điểm từ API hoặc fallback */}
+                    <span className="text-[11px] bg-white/20 px-2 py-1 rounded text-white backdrop-blur-sm border border-white/10 flex items-center">
+                        📍 {matchInfo?.location || "Chưa chốt sân"}
+                    </span>
+                    
+                    {/* Hiển thị giờ thi đấu */}
+                    {matchInfo?.time && (
+                        <span className="text-[11px] bg-blue-600/80 px-2 py-1 rounded text-white font-bold flex items-center">
+                            ⏰ {new Date(matchInfo.time).getHours()}h{String(new Date(matchInfo.time).getMinutes()).padStart(2, '0')}
+                        </span>
+                    )}
+
+                    <span className="text-[11px] bg-green-600/90 px-2 py-1 rounded text-white font-bold flex items-center">
+                        💰 Quỹ: {totalPaid}/{players.length}
                     </span>
                 </div>
             </div>

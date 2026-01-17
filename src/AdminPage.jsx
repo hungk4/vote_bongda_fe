@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_PLAYERS, API_LOGIN } from './config';
+import { API_PLAYERS, API_LOGIN, API_MATCH } from './config';
 
 const CR7_LOGIN_IMG = "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg";
 
@@ -23,6 +23,9 @@ function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // --- State mới cho thông tin trận đấu ---
+  const [matchInfo, setMatchInfo] = useState({ location: '', time: '' });
+
   useEffect(() => { if (adminPass) verifyPassword(adminPass); }, []);
 
   const showToast = (message, type = 'success') => {
@@ -33,7 +36,10 @@ function AdminPage() {
   const verifyPassword = async (password) => {
     try {
         await axios.post(API_LOGIN, { adminPass: password });
-        setIsLoggedIn(true); localStorage.setItem('adminPass', password); fetchPlayers(); 
+        setIsLoggedIn(true); 
+        localStorage.setItem('adminPass', password); 
+        fetchPlayers(); 
+        fetchMatchInfo(); // <--- Gọi thêm hàm này
     } catch (err) { setIsLoggedIn(false); }
   };
 
@@ -44,12 +50,51 @@ function AdminPage() {
     } catch (e) { console.error(e); }
   };
 
+  // -- Lấy thông tin trận đấu ---
+  const fetchMatchInfo = async () => {
+    try {
+      const res = await axios.get(API_MATCH);
+      if (res.data) {
+        let formattedTime = '';
+        if (res.data.time) {
+            // Xử lý hiển thị giờ địa phương cho input datetime-local
+            const date = new Date(res.data.time);
+            const offset = date.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(date - offset)).toISOString().slice(0, 16);
+            formattedTime = localISOTime;
+        }
+        setMatchInfo({ 
+            location: res.data.location || '', 
+            time: formattedTime 
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi lấy thông tin trận:", error);
+    }
+  };
+
+  // --- Hàm mới: Lưu thông tin trận đấu ---
+  const handleSaveMatchInfo = async () => {
+    try {
+      await axios.post(API_MATCH, {
+        location: matchInfo.location,
+        time: matchInfo.time
+      });
+      showToast('Cập nhật thông tin trận đấu thành công!', 'success');
+    } catch (error) {
+      showToast('Lỗi khi lưu thông tin trận đấu', 'error');
+    }
+  };
+
   const handleLogin = async () => {
     if (!adminPass) return alert("Nhập mật khẩu vào đi sếp!");
     setLoading(true);
     try {
         await axios.post(API_LOGIN, { adminPass });
-        setIsLoggedIn(true); localStorage.setItem('adminPass', adminPass); fetchPlayers(); 
+        setIsLoggedIn(true); 
+        localStorage.setItem('adminPass', adminPass); 
+        fetchPlayers();
+        fetchMatchInfo(); // <--- Gọi thêm hàm này
     } catch (err) { alert("Sai mật khẩu!"); setIsLoggedIn(false); } 
     finally { setLoading(false); }
   };
@@ -92,7 +137,6 @@ function AdminPage() {
       const teamA_Ids = updatedPlayers.filter(p => p.team === 'A').map(p => p._id);
       const teamB_Ids = updatedPlayers.filter(p => p.team === 'B').map(p => p._id);
       
-      // Hiện thông báo khi sắp thủ công
       const playerName = players.find(p => p._id === playerId).name;
       const teamName = newTeam === 'A' ? "Team A" : newTeam === 'B' ? "Team B" : "Hủy team";
       
@@ -142,15 +186,52 @@ function AdminPage() {
         {/* Header */}
         <div className="flex justify-between items-center p-5 border-b border-gray-100 flex-wrap gap-3 bg-white">
             <div className="flex items-center gap-2">
-                <span className="text-2xl animate-bounce">🛠</span>
+                <span className="text-2xl">🛠</span>
                 <h1 className="m-0 text-lg text-gray-800 font-bold uppercase tracking-tight">Quản Lý ({players.length})</h1>
             </div>
             <div className="flex gap-2 flex-wrap">
-                <button onClick={handleRandomSplit} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-all hover:shadow-md active:scale-95">⚡ Random</button>
-                <button onClick={handleResetTeams} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all hover:shadow-md active:scale-95">🔄 Reset</button>
+                <button onClick={handleRandomSplit} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-all hover:shadow-md active:scale-95">⚡ Random Chia đội</button>
+                <button onClick={handleResetTeams} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all hover:shadow-md active:scale-95">🔄 Reset Chia đội</button>
                 <button onClick={handleLogout} className="px-3 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-all hover:shadow-md active:scale-95">Thoát</button>
             </div>
         </div>
+
+        {/* --- PHẦN MỚI: Form Cài Đặt Trận Đấu --- */}
+        <div className="p-5 bg-blue-50 border-b border-blue-100">
+            <h2 className="text-sm font-bold text-blue-800 uppercase mb-3 flex items-center gap-2">
+                ⏰ Cài Đặt Trận Đấu
+            </h2>
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                    <label className="block text-xs font-semibold text-blue-700 mb-1">Địa điểm:</label>
+                    <input 
+                        type="text" 
+                        placeholder="Ví dụ: Sân Mỹ Đình"
+                        className="w-full p-2 rounded border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                        value={matchInfo.location}
+                        onChange={(e) => setMatchInfo({...matchInfo, location: e.target.value})}
+                    />
+                </div>
+                <div className="flex-1">
+                    <label className="block text-xs font-semibold text-blue-700 mb-1">Thời gian:</label>
+                    <input 
+                        type="datetime-local" 
+                        className="w-full p-2 rounded border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                        value={matchInfo.time}
+                        onChange={(e) => setMatchInfo({...matchInfo, time: e.target.value})}
+                    />
+                </div>
+                <div className="flex items-end">
+                    <button 
+                        onClick={handleSaveMatchInfo}
+                        className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold hover:bg-blue-700 shadow-sm transition-all active:scale-95 whitespace-nowrap w-full md:w-auto"
+                    >
+                        Lưu Cài Đặt
+                    </button>
+                </div>
+            </div>
+        </div>
+        {/* -------------------------------------- */}
 
         {/* Table */}
         <div className="overflow-x-auto pb-2">
